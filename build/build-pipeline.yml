@@ -1,0 +1,93 @@
+name: $(Build.SourceBranchName)-$(Build.BuildId)
+trigger:
+ batch: true
+ branches: none
+
+variables:
+- name: BuildTemplatePath
+  value: manifests/azure-agent-buildconfig.yaml
+- name: ConfigTemplatePath
+  value: manifests/azure-agent-configmap.yaml
+- name: SecretsTemplatePath
+  value: manifests/azure-agent-secret.yaml
+- name: DeployTemplatePath
+  value: manifests/azure-agent-deploymentconfig.yaml
+- name: ApplicationName
+  value: azure-devops-agent
+- name: openshift_namespace
+  value: my-namespace
+- name: gitUrl
+  value: git@github.com:fgiele/openshift-azure-devops-agents.git
+
+jobs:
+- job:
+  workspace:
+    clean: all
+  displayName: 'On containers'
+  pool:
+    name: 'ContainerBuilders'
+  steps:
+  - checkout: self
+    persistCredentials: 'true'
+
+  - task: oc-setup@2
+    inputs:
+      connectionType: 'OpenShift Connection Service'
+      openshiftService: 'OpenshiftServiceConnection'
+
+  - task: CmdLine@2
+    displayName: Process build template
+    inputs:
+      script: 'oc process -f $(System.DefaultWorkingDirectory)/$(BuildTemplatePath) --local -p APPLICATIONNAME=$(ApplicationName) -p SOURCE_REPOSITORY_REF=$(Build.SourceBranchName) -p SOURCE_REPOSITORY_URL=$(gitUrl) -o=yaml > build-template.yaml'
+
+  - task: oc-cmd@2
+    displayName: Apply build template DCR1
+    inputs:
+      openshiftService: 'OpenshiftServiceConnection'
+      cmd: 'apply -f $(System.DefaultWorkingDirectory)/build-template.yaml -n $(openshift_namespace) --wait'
+
+  - task: oc-cmd@2
+    displayName: Build Image DCR1
+    inputs:
+      openshiftService: 'OpenshiftServiceConnection'
+      cmd: 'start-build bc/$(ApplicationName) -n $(openshift_namespace) --commit=$(Build.SourceVersion) --follow --wait'
+      
+  - task: CmdLine@2
+    displayName: Process config template
+    inputs:
+      script: 'oc process -f $(System.DefaultWorkingDirectory)/$(ConfigTemplatePath) --local -p APPLICATIONNAME=$(ApplicationName) -p AZP_URL=$(AZP_URL) -p AZP_POOL=$(AZP_POOL) -o=yaml > config-template.yaml'
+
+  - task: oc-cmd@2
+    displayName: Apply config template DCR1
+    inputs:
+      openshiftService: 'OpenshiftServiceConnection'
+      cmd: 'apply -f $(System.DefaultWorkingDirectory)/config-template.yaml -n $(openshift_namespace) --wait'
+      
+  - task: CmdLine@2
+    displayName: Process secrets template
+    inputs:
+      script: 'oc process -f $(System.DefaultWorkingDirectory)/$(SecretsTemplatePath) --local -p APPLICATIONNAME=$(ApplicationName) -p AZP_TOKEN=$(AZP_TOKEN) -o=yaml > secret-template.yaml'
+
+  - task: oc-cmd@2
+    displayName: Apply config template DCR1
+    inputs:
+      openshiftService: 'OpenshiftServiceConnection'
+      cmd: 'apply -f $(System.DefaultWorkingDirectory)/secret-template.yaml -n $(openshift_namespace) --wait'
+      
+  - task: CmdLine@2
+    displayName: Process deployment template
+    inputs:
+      script: 'oc process -f $(System.DefaultWorkingDirectory)/$(DeployTemplatePath) --local -p APPLICATIONNAME=$(ApplicationName) -o=yaml > deploy-template.yaml'
+
+  - task: oc-cmd@2
+    displayName: Apply config template DCR1
+    inputs:
+      openshiftService: 'OpenshiftServiceConnection'
+      cmd: 'apply -f $(System.DefaultWorkingDirectory)/deploy-template.yaml -n $(openshift_namespace)'
+      
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: deployment template Development DCR1'
+    condition: 'false'
+    inputs:
+      ArtifactName: template      
+      PathtoPublish: $(System.DefaultWorkingDirectory)/deploy-development-template.yaml

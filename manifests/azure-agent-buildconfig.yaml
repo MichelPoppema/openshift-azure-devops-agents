@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: ${APPLICATIONNAME}-buildconfig-template
+  annotations:
+    description: "${APPLICATIONNAME} buildconfig template"
+    tags: "azure-agent"
+parameters:
+- description: Name of the application
+  name: APPLICATIONNAME
+  value: azure-devops-agent
+- description: GIT URL For Dockerfile
+  name: SOURCE_REPOSITORY_URL
+  value: git@github.com:fgiele/openshift-azure-devops-agents.git
+- description: git repo secret name
+  name: REPO_SECRET
+  value: "azdogitsshkey"
+- description: SOURCE_REPOSITORY_REF
+  name: SOURCE_REPOSITORY_REF
+  value: "master"
+objects:
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    labels:
+      build: ${APPLICATIONNAME}
+    name: ${APPLICATIONNAME}
+  spec:
+    lookupPolicy:
+      local: false
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      build: ${APPLICATIONNAME}
+    name: ${APPLICATIONNAME}
+  spec:
+    completionDeadlineSeconds: 1800
+    successfulBuildsHistoryLimit: 1 
+    failedBuildsHistoryLimit: 1 
+    nodeSelector: null
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${APPLICATIONNAME}:latest
+    runPolicy: Serial
+    source:
+      git:
+        uri: "${SOURCE_REPOSITORY_URL}"
+        ref: "${SOURCE_REPOSITORY_REF}"
+      sourceSecret:
+        name: ${REPO_SECRET}
+      type: Git
+    strategy:
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          name: ubuntu:18.04
+      type: Docker

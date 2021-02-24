@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: ${APPLICATIONNAME}-deploymentconfig-template
+  annotations:
+    description: "${APPLICATIONNAME} deploymentconfig template"
+    tags: "azure-agent"
+parameters:
+- description: Name of the application
+  name: APPLICATIONNAME
+  value: azure-devops-agent
+- description: Replicas
+  name: REPLICAS
+  required: false
+  value: "2"
+objects:
+- apiVersion: apps.openshift.io/v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: azure-devops-agent
+    name: ${APPLICATIONNAME}
+  spec:
+    replicas: ${{REPLICAS}}
+    revisionHistoryLimit: 1
+    selector:
+      app: ${APPLICATIONNAME}
+      deploymentconfig: ${APPLICATIONNAME}
+    strategy:
+      activeDeadlineSeconds: 21600
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: ${APPLICATIONNAME}
+          deploymentconfig: ${APPLICATIONNAME}
+      spec:
+        containers:
+        - env:
+          - name: AZP_URL
+            valueFrom:
+              configMapKeyRef:
+                key: AZP_URL
+                name: ${APPLICATIONNAME}
+          - name: AZP_POOL
+            valueFrom:
+              configMapKeyRef:
+                key: AZP_POOL
+                name: ${APPLICATIONNAME}
+          - name: AZP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                key: AZP_TOKEN
+                name: ${APPLICATIONNAME}
+          image: ${APPLICATIONNAME}:latest
+          imagePullPolicy: Always
+          name: ${APPLICATIONNAME}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATIONNAME}
+        from:
+          kind: ImageStreamTag
+          name: "${APPLICATIONNAME}:latest"
+      type: ImageChange
