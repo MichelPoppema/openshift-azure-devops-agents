@@ -28,10 +28,10 @@ RUN apt-get update \
 WORKDIR /certtemp
 RUN for CERT in "http://company.pki.url/ROOTCA.crt" \
                 "http://company.pki.url/ADDITIONAL-ROOTCA.crt" \
-                "http://company.pki.url/ETC.crt" \
+                "http://company.pki.url/ETC.crt"; \
         do curl ${CERT} --output /certtemp/$(basename ${CERT}); \
             openssl x509 -in /certtemp/$(basename ${CERT}) -inform DER -out /usr/local/share/ca-certificates/$(basename ${CERT}); \
-        done
+        done;
 RUN update-ca-certificates
 
 # Add Microsoft debian repo
