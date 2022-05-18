@@ -19,11 +19,13 @@ OpenShift manifests and instructions for running Azure Agent on OpenShift
 
 ## Create azure-repos pull secret
 
-The build template expects a secret available on the Openshift namespace called *azdogitsshkey*. This SSH key should be registered under an account with access to the repository.
+The build template expects a source secret available on the Openshift namespace called *azdogitsshkey*. This SSH key should be registered under an account with access to the repository. In Openshift, use *Create source secret* and add the private key.
 
 ## Create imagestream
 
 Openshift expects an imagestream called Ubuntu:18.04 as basis to build the agent based on these templates
+This can be added to your imagestream with:  
+```oc import-image ubuntu:18.04 --confirm```
 
 # Azure Agent Deployment
 
