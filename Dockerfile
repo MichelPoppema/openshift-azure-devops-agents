@@ -24,11 +24,10 @@ RUN apt-get update \
         default-jdk \
         maven
 
-# If your company uses its own Root Certificate Authority
+# If your company uses its own Root Certificate Authority create site files (site/company.pki.url/ROOTCA.crt transforms to http://company.pki.url/ROOTCA.crt)
 WORKDIR /certtemp
-RUN for CERT in "http://company.pki.url/ROOTCA.crt" \
-                "http://company.pki.url/ADDITIONAL-ROOTCA.crt" \
-                "http://company.pki.url/ETC.crt"; \
+COPY site /tmp/ca
+RUN find /tmp/ca -type f ! -name '.gitignore' | sed 's/\/tmp\/ca/http:/' | while read CERT; \
         do curl ${CERT} --output /certtemp/$(basename ${CERT}); \
             openssl x509 -in /certtemp/$(basename ${CERT}) -inform DER -out /usr/local/share/ca-certificates/$(basename ${CERT}); \
         done;
@@ -61,7 +60,7 @@ RUN chgrp -R 0 /azp && \
 
 # Make company Root CA available for the agent process (NodeJS)
 RUN mkdir /azp/certchain
-RUN cat /usr/local/share/ca-certificates/ROOTCA.crt /usr/local/share/ca-certificates/ADDITIONAL-ROOTCA.crt /usr/local/share/ca-certificates/ETC.crt > /azp/certchain/combined.pem
+RUN find /usr/local/share/ca-certificates -type f -name '*.crt' -exec cat {} \; > /azp/certchain/combined.pem
 
 COPY ./start.sh .
 RUN chmod +x start.sh
@@ -83,7 +82,12 @@ RUN chgrp -R 0 /home && \
 ### Containers should NOT run as root as a good practice
 USER 10001
 
+ENV AGENT_ALLOW_RUNASROOT="1"
+ENV NODE_EXTRA_CA_CERTS='/azp/certchain/jst_combined.pem'
+ENV HOME='/home'
+ENV JAVA_HOME_11_X64='/usr/lib/jvm/java-11-openjdk-amd64'
+
 ### user name recognition at runtime w/ an arbitrary uid - for OpenShift deployments
 ENTRYPOINT [ "uid_entrypoint" ]
 
-CMD ["./start.sh"]
+CMD ["./start.sh", "agent"]
