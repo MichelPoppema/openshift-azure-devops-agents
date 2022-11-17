@@ -54,6 +54,9 @@ RUN apt-get update \
 && apt-get install -y nodejs \
         node-typescript
 
+# Can be 'linux-x64', 'linux-arm64', 'linux-arm', 'rhel.6-x64'.
+ENV TARGETARCH=linux-x64
+
 WORKDIR /azp
 RUN chgrp -R 0 /azp && \
     chmod -R g=u /azp
@@ -87,7 +90,5 @@ ENV NODE_EXTRA_CA_CERTS='/azp/certchain/jst_combined.pem'
 ENV HOME='/home'
 ENV JAVA_HOME_11_X64='/usr/lib/jvm/java-11-openjdk-amd64'
 
-### user name recognition at runtime w/ an arbitrary uid - for OpenShift deployments
-ENTRYPOINT [ "uid_entrypoint" ]
 
-CMD ["./start.sh", "agent"]
+ENTRYPOINT ["./start.sh", "agent"]

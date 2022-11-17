@@ -8,8 +8,9 @@ set -e
 # AZP_WORK: Work directory of agent (default '_work')
 # AZP_POOL: The pool the agent will belong to (default: 'Default') 
 # AZP_AGENT_NAME: Name of the agent in the pool (default: valueOf uname -n)
-# AZP_AGENTPACKAGE_URL: If set don't use the matching Azure Pipelines agent but this url to download the agent
+# AZP_AGENT_PACKAGE_LATEST_URL: If set don't use the matching Azure Pipelines agent but this url to download the agent
 # AZP_CAPABILITY_ENV_VARS: If set dont exclude only AZP_* variables but include only the named environment variables as system capabilities.
+
 
 restart_with_clean_env() {
     if [ -z "$AZP_TOKEN" ]; then
@@ -17,7 +18,7 @@ restart_with_clean_env() {
     else
       local TOKEN=$AZP_TOKEN
       unset AZP_TOKEN
-      export AZP_URL AZP_POOL AZP_WORK AZP_AGENT_NAME AZP_AGENTPACKAGE_URL AZP_CAPABILITY_ENV_VARS
+      export AZP_URL AZP_POOL AZP_WORK AZP_AGENT_NAME AZP_AGENT_PACKAGE_LATEST_URL AZP_CAPABILITY_ENV_VARS TARGETARCH
       exec $@ <<< $TOKEN
     fi      
 }
@@ -31,13 +32,27 @@ cleanup() {
   local AZP_URL=$2
   if [ -e config.sh ]; then
     print_header "Cleanup. Removing Azure Pipelines agent..."
+
+    # Disable agent to prevent new jobs to start
+    local AZP_POOL_ID=$(jq '.poolId//""' .agent) || true
+    local AZP_AGENT_ID=$(jq '.agentId//""' .agent) || true
+    if [[ ! -z "$AZP_POOL_ID" && ! -z "$AZP_AGENT_ID" ]]; then
+      local AZP_DISABLE_RESPONSE=$(curl -LsS -X PATCH -u :$AZP_TOKEN -H 'Content-Type: application/json' \
+        -d "{\"id\":$AZP_AGENT_ID,\"enabled\":false}" \
+        $AZP_URL/_apis/distributedtask/pools/$AZP_POOL_ID/agents/$AZP_AGENT_ID?api-version=5.0 || true)
+    fi
     
     # Workaround for preventing VS30063 message (only permissions on project level)
     [[ -e .agent ]] && sed -i 's@"serverUrl".*@"serverUrl": "'${AZP_URL}'",@' .agent
 
-    ./config.sh remove --unattended \
-      --auth PAT \
-      --token $AZP_TOKEN
+    # If the agent has some running jobs, the configuration removal process will fail.
+    # So, give it some time to finish the job.
+    while true; do
+      ./config.sh remove --unattended --auth PAT --token $AZP_TOKEN && break
+
+      echo "Retrying in 30 seconds..."
+      sleep 30
+    done
   fi
 }
 
@@ -58,7 +73,8 @@ capablities_from_env() {
         export VSO_AGENT_IGNORE=VSO_AGENT_IGNORE,$(echo ${env_vars[@]}|sed 's/ /,/g')
     else
         # AZP_CAPABILITY_ENV_VARS not set so only exclude our own environment variables
-        export VSO_AGENT_IGNORE=VSO_AGENT_IGNORE,AZP_TOKEN_AZP_URL$(for v in AZP_WORK AZP_POOL AZP_AGENT_NAME AZP_AGENTPACKAGE_URL; do [[ -v $v ]] && echo ",$v"; done)
+        local AZP_OPTIONALS="AZP_WORK AZP_POOL AZP_AGENT_NAME AZP_AGENT_PACKAGE_LATEST_URL"
+        export VSO_AGENT_IGNORE=VSO_AGENT_IGNORE,AZP_TOKEN,AZP_URL$(for v in $AZP_OPTIONALS; do [[ -v $v ]] && echo ",$v"; done)
     fi
 }
 
@@ -68,7 +84,7 @@ agent() {
     exit 1
   fi
 
-  # Recycle so we dont leak AZP_TOKEN in 'ps eww' output
+  ### Recycle so we dont leak AZP_TOKEN in 'ps eww' output
   restart_with_clean_env $0 ${FUNCNAME[0]} $@
 
   if [ -z "$AZP_TOKEN" ]; then
@@ -76,49 +92,50 @@ agent() {
     exit 1
   fi
 
+  ### user name recognition at runtime w/ an arbitrary uid - for OpenShift deployments
+  if [ -x ./bin/uid_entrypoint ]; then
+    source ./bin/uid_entrypoint
+  fi
+
   if [ -n "$AZP_WORK" ]; then
     mkdir -p "$AZP_WORK"
   fi
 
-  # Cleanup kubeconfig files
+### Cleanup kubeconfig files
   rm -rf /home/.kube
 
   rm -rf /azp/agent
   mkdir /azp/agent
   cd /azp/agent
 
+  # Let the agent ignore the token env variable
+  export VSO_AGENT_IGNORE=AZP_TOKEN
+  
+  ### Hide even more
+  capablities_from_env
+
   print_header "1. Determining matching Azure Pipelines agent..."
 
-  if [ -z "$AZP_AGENTPACKAGE_URL" ]; then
-    local AZP_AGENT_RESPONSE=$(curl -LsS \
-      -u user:$AZP_TOKEN \
-      -H 'Accept:application/json;api-version=3.0-preview' \
-      "$AZP_URL/_apis/distributedtask/packages/agent?platform=linux-x64")
+  if [ -z "$AZP_AGENT_PACKAGE_LATEST_URL" ]; then
+    local AZP_AGENT_PACKAGES=$(curl -LsS \
+        -u user:$AZP_TOKEN \
+        -H 'Accept:application/json;' \
+        "$AZP_URL/_apis/distributedtask/packages/agent?platform=$TARGETARCH&top=1")
 
-    if echo "$AZP_AGENT_RESPONSE" | jq . >/dev/null 2>&1; then
-      AZP_AGENTPACKAGE_URL=$(echo "$AZP_AGENT_RESPONSE" \
-        | jq -r '.value | map([.version.major,.version.minor,.version.patch,.downloadUrl]) | sort | .[length-1] | .[3]')
+    AZP_AGENT_PACKAGE_LATEST_URL=$(echo "$AZP_AGENT_PACKAGES" | jq -r '.value[0].downloadUrl')
+
+    if [ -z "$AZP_AGENT_PACKAGE_LATEST_URL" -o "$AZP_AGENT_PACKAGE_LATEST_URL" == "null" ]; then
+      echo 1>&2 "error: could not determine a matching Azure Pipelines agent"
+      echo 1>&2 "check that account '$AZP_URL' is correct and the token is valid for that account"
+      exit 1
     fi
-  fi
-  if [ -z "$AZP_AGENTPACKAGE_URL" -o "$AZP_AGENTPACKAGE_URL" == "null" ]; then
-    echo 1>&2 "error: could not determine a matching Azure Pipelines agent - check that account '$AZP_URL' is correct and the token is valid for that account"
-    exit 1
   fi
 
   print_header "2. Downloading and installing Azure Pipelines agent..."
 
-  curl -LsS $AZP_AGENTPACKAGE_URL | tar -xz & wait $!
+  curl -LsS $AZP_AGENT_PACKAGE_LATEST_URL | tar -xz & wait $!
 
   source ./env.sh
-
-  trap "cleanup $AZP_TOKEN $AZP_URL"'; exit 130' INT
-  trap "cleanup $AZP_TOKEN $AZP_URL"'; exit 143' TERM
-
-  # set VSO_AGENT_IGNORE to prevent some environment variables to become system capabilities
-  capablities_from_env
-
-  # Enable next line to catch contents of logfile on error
-  #trap "cat_log" ERR
 
   print_header "3. Configuring Azure Pipelines agent..."
 
@@ -134,18 +151,18 @@ agent() {
 
   print_header "4. Running Azure Pipelines agent..."
 
-  trap "cleanup $AZP_TOKEN $AZP_URL" EXIT
-  
-  # Clean environment so we dont leak those to pipeline jobs
-  unset AZP_TOKEN AZP_WORK AZP_POOL AZP_URL AZP_AGENT_NAME AZP_AGENTPACKAGE_URL AZP_CAPABILITY_ENV_VARS
+  trap "cleanup $AZP_TOKEN $AZP_URL"'; exit 0' EXIT
+  trap "cleanup $AZP_TOKEN $AZP_URL"'; exit 130' INT
+  trap "cleanup $AZP_TOKEN $AZP_URL"'; exit 143' TERM
 
-  # `exec` the node runtime so it's aware of TERM and INT signals
-  # AgentService.js understands how to handle agent self-update and restart
-  exec ./externals/node/bin/node ./bin/AgentService.js interactive --once & wait $!
+  chmod +x ./run-docker.sh
 
-  # We expect the above process to exit when it runs once,
-  # so we now run a cleanup process to remove this agent
-  # from the pool from the trap EXIT
+  ### Clean environment
+  unset AZP_TOKEN AZP_WORK AZP_POOL AZP_URL AZP_AGENT_NAME AZP_AGENT_PACKAGE_LATEST_URL AZP_CAPABILITY_ENV_VARS
+
+  # To be aware of TERM and INT signals call run.sh
+  # Running it with the --once flag at the end will shut down the agent after the build is executed
+  ./run-docker.sh "$@" & wait $!
 }
 
 [[ $(type -t $1) != function ]] || $@

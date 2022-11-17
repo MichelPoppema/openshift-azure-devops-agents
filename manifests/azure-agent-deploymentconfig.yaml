@@ -60,6 +60,8 @@ objects:
                 key: AZP_TOKEN
                 name: ${APPLICATIONNAME}
           image: ${APPLICATIONNAME}:latest
+          args:
+            - '--once'
           imagePullPolicy: Always
           name: ${APPLICATIONNAME}
           terminationMessagePath: /dev/termination-log
