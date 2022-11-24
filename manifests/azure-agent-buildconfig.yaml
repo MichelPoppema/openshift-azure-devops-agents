@@ -53,7 +53,15 @@ objects:
       type: Git
     strategy:
       dockerStrategy:
+# If your company uses a proxy uncomment these lines:
+#        env:
+#          - name: http_proxy
+#            value: http://company.proxy.url:8080/
+#          - name: https_proxy
+#            value: http://company.proxy.url:8080/
+#          - name: no_proxy
+#            value: .company.internal.net
         from:
           kind: ImageStreamTag
-          name: ubuntu:18.04
+          name: centos:stream8
       type: Docker

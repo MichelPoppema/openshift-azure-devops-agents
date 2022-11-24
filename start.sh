@@ -92,11 +92,6 @@ agent() {
     exit 1
   fi
 
-  ### user name recognition at runtime w/ an arbitrary uid - for OpenShift deployments
-  if [ -x ./bin/uid_entrypoint ]; then
-    source ./bin/uid_entrypoint
-  fi
-
   if [ -n "$AZP_WORK" ]; then
     mkdir -p "$AZP_WORK"
   fi
