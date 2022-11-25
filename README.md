@@ -11,11 +11,13 @@ OpenShift manifests and instructions for running Azure Agent on OpenShift
 
 ## Customisations
 
+- Based on Centos:stream8 with findutils and (un)zip
 - Automatic cleanup of agents on container exit
 - ephermal agent runs a single job and then exits using --once
-- Node.js & NPM (LTS)
-- DotNet Core 2.1, 3.1 and 5.0
-- Java default & Maven
+- Node.js & NPM (16)
+- DotNet SDK 6.0
+- Java 11/17 & Maven 3.6
+- Python 3.9
 
 ## Create azure-repos pull secret
 
@@ -23,9 +25,9 @@ The build template expects a source secret available on the Openshift namespace 
 
 ## Create imagestream
 
-Openshift expects an imagestream called Ubuntu:18.04 as basis to build the agent based on these templates
+Openshift expects an imagestream called Centos:stream8 as basis to build the agent based on these templates
 This can be added to your imagestream with:  
-```oc import-image ubuntu:18.04 --confirm```
+```oc import-image centos:stream8 --confirm```
 
 # Azure Agent Deployment
 

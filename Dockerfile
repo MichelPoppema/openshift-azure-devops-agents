@@ -1,94 +1,65 @@
-FROM ubuntu:18.04
+ARG BASE=centos:stream8
+FROM $BASE
 
-# To make it easier for build and release pipelines to run apt-get,
-# configure apt to not require confirmation (assume the -y argument by default)
+RUN yum module enable -y maven:3.6 nodejs:16 \
+    && yum update -y \
+    && yum install -y --nobest \
+       ca-certificates \
+       jq \
+       tar \
+       git \
+       openssl-libs \
+       krb5-libs \
+       zlib \
+       libicu \
+       lttng-ust \
+       java-11-openjdk-headless \
+       java-11-openjdk-devel \
+       java-17-openjdk-headless \
+       java-17-openjdk-devel \
+       maven \
+       nodejs \
+       dotnet-sdk-6.0 \
+       zip \
+       python39 \
+       findutils \
+    && yum clean all -y
 
-ENV DEBIAN_FRONTEND=noninteractive
-# If your company uses a proxy:
-ENV http_proxy=http://company.proxy.url:8080/
-ENV https_proxy=http://company.proxy.url:8080/
-ENV no_proxy=.company.internal.net
-RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/90assumeyes
+# From https://manuals.gfi.com/en/kerio/connect/content/server-configuration/ssl-certificates/adding-trusted-root-certificates-to-the-server-1605.html
+## Linux (CentOs 6)
+COPY site/ca /tmp/ca
+RUN update-ca-trust force-enable \
+    && find /tmp/ca -type f ! -name '.gitignore' | sed 's/\/tmp\/ca/http:/' | xargs -n1 -r curl -s > /etc/pki/ca-trust/source/anchors/internal.crt \; \
+    && update-ca-trust extract \
+    && rm -rf /tmp/ca
 
-RUN apt-get update \
-&& apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        jq \
-        git \
-        iputils-ping \
-        libcurl4 \
-        libicu60 \
-        libunwind8 \
-        netcat \
-        default-jdk \
-        maven
-
-# If your company uses its own Root Certificate Authority create site files (site/company.pki.url/ROOTCA.crt transforms to http://company.pki.url/ROOTCA.crt)
-WORKDIR /certtemp
-COPY site /tmp/ca
-RUN find /tmp/ca -type f ! -name '.gitignore' | sed 's/\/tmp\/ca/http:/' | while read CERT; \
-        do curl ${CERT} --output /certtemp/$(basename ${CERT}); \
-            openssl x509 -in /certtemp/$(basename ${CERT}) -inform DER -out /usr/local/share/ca-certificates/$(basename ${CERT}); \
-        done;
-RUN update-ca-certificates
-
-# Add Microsoft debian repo
-RUN curl https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb --output packages-microsoft-prod.deb
-RUN dpkg -i packages-microsoft-prod.deb
-
-# Install dotnet core 2.1, 3.1 and 5.0
-RUN apt-get update \
-&& apt-get install -y --no-install-recommends \
-        powershell \
-        apt-transport-https \
-        dotnet-sdk-5.0 \
-        dotnet-sdk-3.1 \
-        dotnet-sdk-2.1
-
-# Add Node.js 14.x LTS
-RUN curl -sL https://deb.nodesource.com/setup_lts.x | bash -
-
-# Install nodejs, npm and typescript
-RUN apt-get update \
-&& apt-get install -y nodejs \
-        node-typescript
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk \
+    JAVA_HOME_11_X64=/usr/lib/jvm/java-11-openjdk \
+    JAVA_HOME_17_X64=/usr/lib/jvm/java-17-openjdk \
+    NODE_EXTRA_CA_CERTS=/etc/pki/ca-trust/source/anchors/internal.crt 
 
 # Can be 'linux-x64', 'linux-arm64', 'linux-arm', 'rhel.6-x64'.
 ENV TARGETARCH=linux-x64
 
 WORKDIR /azp
-RUN chgrp -R 0 /azp && \
-    chmod -R g=u /azp
 
-# Make company Root CA available for the agent process (NodeJS)
-RUN mkdir /azp/certchain
-RUN find /usr/local/share/ca-certificates -type f -name '*.crt' -exec cat {} \; > /azp/certchain/combined.pem
+# RHEL8's /etc/java/maven.conf hardcoded sets JAVA_HOME to openjdk 11 preventing overruling jdkVersion in Maven task
+RUN echo '[[ ! -z "${JAVA_HOME}" ]] || JAVA_HOME=/usr/lib/jvm/java-11-openjdk' > /etc/java/maven.conf
 
 COPY ./start.sh .
 RUN chmod +x start.sh
 
-# From: https://github.com/RHsyseng/container-rhel-examples/tree/master/starter-arbitrary-uid
-### Setup user for build execution and application runtime
-ENV APP_ROOT=/opt/app-root
-ENV PATH=${APP_ROOT}/bin:${PATH}
-ENV HOME=/home
-COPY bin/ ${APP_ROOT}/bin/
-RUN chmod -R u+x ${APP_ROOT}/bin && \
-    chgrp -R 0 ${APP_ROOT} && \
-    chmod -R g=u ${APP_ROOT} /etc/passwd
+RUN python3.9 -m venv .python 
+COPY site/home .
+RUN  /azp/.python/bin/python -m pip install --upgrade pip
 
-# Give user access to
-RUN chgrp -R 0 /home && \
-    chmod -R g=u /home
+# From https://docs.openshift.com/container-platform/4.10/openshift_images/create-images.html#images-create-guide-openshift_create-images
+## Support arbitrary user ids
+RUN chgrp -R 0 /azp \
+    && chmod -R g+rwX /azp
 
-### Containers should NOT run as root as a good practice
 USER 10001
 
-ENV AGENT_ALLOW_RUNASROOT="1"
-ENV NODE_EXTRA_CA_CERTS='/azp/certchain/jst_combined.pem'
-ENV HOME='/home'
-ENV JAVA_HOME_11_X64='/usr/lib/jvm/java-11-openjdk-amd64'
-
+ENV HOME=/azp BASH_ENV=/azp/.bashrc
 
 ENTRYPOINT ["./start.sh", "agent"]

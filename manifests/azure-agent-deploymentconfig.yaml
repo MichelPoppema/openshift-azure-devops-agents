@@ -14,8 +14,8 @@ parameters:
   required: false
   value: "2"
 objects:
-- apiVersion: apps.openshift.io/v1
-  kind: DeploymentConfig
+- apiVersion: apps/v1
+  kind: Deployment
   metadata:
     labels:
       app: azure-devops-agent
@@ -24,8 +24,9 @@ objects:
     replicas: ${{REPLICAS}}
     revisionHistoryLimit: 1
     selector:
-      app: ${APPLICATIONNAME}
-      deploymentconfig: ${APPLICATIONNAME}
+      matchLabels:
+        app: ${APPLICATIONNAME}
+        deploymentconfig: ${APPLICATIONNAME}
     strategy:
       activeDeadlineSeconds: 21600
       resources: {}
@@ -35,7 +36,7 @@ objects:
         maxUnavailable: 25%
         timeoutSeconds: 600
         updatePeriodSeconds: 1
-      type: Rolling
+      type: RollingUpdate
     template:
       metadata:
         labels:
@@ -58,6 +59,11 @@ objects:
             valueFrom:
               secretKeyRef:
                 key: AZP_TOKEN
+                name: ${APPLICATIONNAME}
+          - name: AZP_CAPABILITY_ENV_VARS
+            valueFrom:
+              configMapKeyRef:
+                key: AZP_CAPABILITY_ENV_VARS
                 name: ${APPLICATIONNAME}
           image: ${APPLICATIONNAME}:latest
           args:

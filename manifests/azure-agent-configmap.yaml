@@ -16,11 +16,15 @@ parameters:
   name: AZP_POOL
   required: true
   value: ""
+- description: Capablitities
+  name: AZP_CAPABILITY_ENV_VARS
+  value: ""
 objects:
 - apiVersion: v1
   data:
     AZP_URL: ${AZP_URL}
     AZP_POOL: ${AZP_POOL}
+    AZP_CAPABILITY_ENV_VARS: ${AZP_CAPABILITY_ENV_VARS}
   kind: ConfigMap
   metadata:
     name: ${APPLICATIONNAME}
