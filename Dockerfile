@@ -1,8 +1,9 @@
 ARG BASE=centos:stream8
 FROM $BASE
 
-RUN microdnf module enable maven:3.6 nodejs:16 \
-    && microdnf install -y \
+RUN yum module enable -y maven:3.6 nodejs:16 \
+    && yum update -y \
+    && yum install -y --nobest \
        ca-certificates \
        jq \
        tar \
@@ -22,13 +23,13 @@ RUN microdnf module enable maven:3.6 nodejs:16 \
        zip \
        python39 \
        findutils \
-    && microdnf clean all -y
+    && yum clean all -y
 
 # From https://manuals.gfi.com/en/kerio/connect/content/server-configuration/ssl-certificates/adding-trusted-root-certificates-to-the-server-1605.html
 ## Linux (CentOs 6)
 COPY site/ca /tmp/ca
 RUN update-ca-trust force-enable \
-    && find /tmp/ca -type f ! -name '.gitignore' | sed 's/\/tmp\/ca/http:/' | xargs -n1 curl -s > /etc/pki/ca-trust/source/anchors/internal.crt \; \
+    && find /tmp/ca -type f ! -name '.gitignore' | sed 's/\/tmp\/ca/http:/' | xargs -n1 -r curl -s > /etc/pki/ca-trust/source/anchors/internal.crt \; \
     && update-ca-trust extract \
     && rm -rf /tmp/ca
 
@@ -59,6 +60,6 @@ RUN chgrp -R 0 /azp \
 
 USER 10001
 
-ENV BASH_ENV=/azp/.bashrc
+ENV HOME=/azp BASH_ENV=/azp/.bashrc
 
 ENTRYPOINT ["./start.sh", "agent"]
