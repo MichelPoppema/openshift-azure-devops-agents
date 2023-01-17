@@ -16,7 +16,7 @@ OpenShift manifests and instructions for running Azure Agent on OpenShift
 - ephermal agent runs a single job and then exits using --once
 - Node.js & NPM (16)
 - DotNet SDK 6.0
-- Java 11/17 & Maven 3.6
+- Java 11/17 & Maven 3.8
 - Python 3.9
 
 ## Create azure-repos pull secret
