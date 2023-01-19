@@ -55,7 +55,7 @@ jobs:
   - task: CmdLine@2
     displayName: Process config template
     inputs:
-      script: 'oc process -f $(System.DefaultWorkingDirectory)/$(ConfigTemplatePath) --local -p APPLICATIONNAME=$(ApplicationName) -p AZP_URL=$(AZP_URL) -p AZP_POOL=$(AZP_POOL) -o=yaml > config-template.yaml'
+      script: 'oc process -f $(System.DefaultWorkingDirectory)/$(ConfigTemplatePath) --local -p APPLICATIONNAME=$(ApplicationName) -p AZP_URL=$(AZP_URL) -p AZP_POOL=$(AZP_POOL) -p AZP_AGENT_PACKAGE_LATEST_URL=$(AZP_AGENT_PACKAGE_LATEST_URL) -o=yaml > config-template.yaml'
 
   - task: oc-cmd@2
     displayName: Apply config template DCR1

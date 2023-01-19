@@ -63,5 +63,5 @@ objects:
 #            value: .company.internal.net
         from:
           kind: ImageStreamTag
-          name: centos:stream8
+          name: fedora:37
       type: Docker

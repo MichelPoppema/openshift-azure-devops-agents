@@ -65,6 +65,11 @@ objects:
               configMapKeyRef:
                 key: AZP_CAPABILITY_ENV_VARS
                 name: ${APPLICATIONNAME}
+          - name: AZP_AGENT_PACKAGE_LATEST_URL
+            valueFrom:
+              configMapKeyRef:
+                key: AZP_AGENT_PACKAGE_LATEST_URL
+                name: ${APPLICATIONNAME}
           image: ${APPLICATIONNAME}:latest
           args:
             - '--once'

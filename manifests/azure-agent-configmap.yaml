@@ -19,12 +19,16 @@ parameters:
 - description: Capablitities
   name: AZP_CAPABILITY_ENV_VARS
   value: ""
+- description: Agent download url
+  name: AZP_AGENT_PACKAGE_LATEST_URL
+  value: ""
 objects:
 - apiVersion: v1
   data:
     AZP_URL: ${AZP_URL}
     AZP_POOL: ${AZP_POOL}
     AZP_CAPABILITY_ENV_VARS: ${AZP_CAPABILITY_ENV_VARS}
+    AZP_AGENT_PACKAGE_LATEST_URL: ${AZP_AGENT_PACKAGE_LATEST_URL}
   kind: ConfigMap
   metadata:
     name: ${APPLICATIONNAME}
