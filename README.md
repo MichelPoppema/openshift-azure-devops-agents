@@ -11,12 +11,12 @@ OpenShift manifests and instructions for running Azure Agent on OpenShift
 
 ## Customisations
 
-- Based on Centos:stream8 with findutils and (un)zip
+- Based on fedora:37 with findutils and (un)zip
 - Automatic cleanup of agents on container exit
 - ephermal agent runs a single job and then exits using --once
 - Node.js & NPM (16)
 - DotNet SDK 6.0
-- Java 11/17 & Maven 3.6
+- Java 11/17 & Maven 3.8
 - Python 3.9
 
 ## Create azure-repos pull secret
@@ -25,9 +25,9 @@ The build template expects a source secret available on the Openshift namespace 
 
 ## Create imagestream
 
-Openshift expects an imagestream called Centos:stream8 as basis to build the agent based on these templates
+Openshift expects an imagestream called fedora:36 as basis to build the agent based on these templates
 This can be added to your imagestream with:  
-```oc import-image centos:stream8 --confirm```
+```oc import-image fedora:37 --confirm```
 
 # Azure Agent Deployment
 
@@ -35,6 +35,7 @@ The included build script for Azure DevOps expects three variables to be defined
 * AZP_POOL : The Agent pool in which the agents are going to run
 * AZP_URL : The URL to the Azure DevOps organisation (cloud) or collection (on-premise)
 * AZP_TOKEN : A PAT token with sufficient permissions. This is only the **Agent Pools** > **Read & Manage** permission
+* AZP_AGENT_PACKAGE_LATEST_URL: The v3 pre-release agent download URL (Fedora:37 contains OpelSSL 3, incompatble with the current v2 agent). If the v3 agent is released this variable becomes optional again
 
 ## Scale agents
 

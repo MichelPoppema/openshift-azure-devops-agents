@@ -1,7 +1,7 @@
-ARG BASE=centos:stream8
+ARG BASE=fedora:37
 FROM $BASE
 
-RUN yum module enable -y maven:3.6 nodejs:16 \
+RUN yum module enable -y nodejs:16 \
     && yum update -y \
     && yum install -y --nobest \
        ca-certificates \
@@ -33,18 +33,15 @@ RUN update-ca-trust force-enable \
     && update-ca-trust extract \
     && rm -rf /tmp/ca
 
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk \
-    JAVA_HOME_11_X64=/usr/lib/jvm/java-11-openjdk \
-    JAVA_HOME_17_X64=/usr/lib/jvm/java-17-openjdk \
+ENV JAVA_HOME=/usr/lib/jvm/jre-11 \
+    JAVA_HOME_11_X64=/usr/lib/jvm/jre-11 \
+    JAVA_HOME_17_X64=/usr/lib/jvm/jre-17 \
     NODE_EXTRA_CA_CERTS=/etc/pki/ca-trust/source/anchors/internal.crt 
-
+    
 # Can be 'linux-x64', 'linux-arm64', 'linux-arm', 'rhel.6-x64'.
 ENV TARGETARCH=linux-x64
 
 WORKDIR /azp
-
-# RHEL8's /etc/java/maven.conf hardcoded sets JAVA_HOME to openjdk 11 preventing overruling jdkVersion in Maven task
-RUN echo '[[ ! -z "${JAVA_HOME}" ]] || JAVA_HOME=/usr/lib/jvm/java-11-openjdk' > /etc/java/maven.conf
 
 COPY ./start.sh .
 RUN chmod +x start.sh
